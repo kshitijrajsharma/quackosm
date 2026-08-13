@@ -1519,6 +1519,7 @@ class PbfFileReader:
                     tmp_dir_path=self.tmp_dir_path,
                     geometry_filter=self.geometry_filter,
                     progress_bar=bar,
+                    cpu_limit=self.cpu_limit,
                 )
 
                 nodes_intersecting_ids = self.connection.read_parquet(

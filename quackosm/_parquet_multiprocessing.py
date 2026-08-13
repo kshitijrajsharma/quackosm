@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 import traceback
 from pathlib import Path
 from queue import Empty, Queue
@@ -79,12 +80,27 @@ class WorkerSpawnProcess(ctx.Process):  # type: ignore[name-defined,misc]
         return self._exception
 
 
+def _available_cpus() -> int:
+    """CPUs this process may use, honouring affinity and cgroup quota.
+
+    ``multiprocessing.cpu_count`` reports the machine, so a limited container would
+    start one worker per host core, each holding a row group in memory.
+    """
+    process_cpu_count = getattr(os, "process_cpu_count", None)
+    if process_cpu_count is not None:
+        return process_cpu_count() or 1
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0)) or 1
+    return multiprocessing.cpu_count()
+
+
 def map_parquet_dataset(
     dataset_path: Path,
     destination_path: Path,
     function: Callable[[pa.Table], pa.Table],
     columns: Optional[list[str]] = None,
     progress_bar: Optional[TaskProgressBar] = None,
+    cpu_limit: Optional[int] = None,
 ) -> None:
     """
     Apply a function over parquet dataset in a multiprocessing environment.
@@ -99,6 +115,8 @@ def map_parquet_dataset(
         columns (Optional[list[str]]): List of columns to read. Defaults to `None`.
         progress_bar (Optional[TaskProgressBar]): Progress bar to show task status.
             Defaults to `None`.
+        cpu_limit (Optional[int]): Max number of worker processes. Defaults to `None`,
+            which uses the number of CPUs available to this process.
     """
     dataset = pq.ParquetDataset(dataset_path)
 
@@ -123,7 +141,7 @@ def map_parquet_dataset(
                 target=_job,
                 args=(queue, destination_path, function, columns),
             )
-            for _ in range(min(multiprocessing.cpu_count(), total))
+            for _ in range(min(cpu_limit or _available_cpus(), total))
         ]
         _run_processes(processes=processes, queue=queue, total=total, progress_bar=progress_bar)
     finally:  # pragma: no cover
