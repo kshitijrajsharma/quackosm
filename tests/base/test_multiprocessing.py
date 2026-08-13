@@ -6,8 +6,11 @@ from pathlib import Path
 from random import random
 from time import sleep
 from typing import Any
+from unittest.mock import patch
 
 import duckdb
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from quackosm._exceptions import MultiprocessingRuntimeError
@@ -19,6 +22,11 @@ def raise_error(pa: Any) -> Any:
     """Function for raising error."""
     sleep(random())
     raise Exception("Quack!")
+
+
+def return_table(table: Any) -> Any:
+    """Function returning the table unchanged."""
+    return table
 
 
 def test_parquet_exception_wrapping() -> None:
@@ -61,3 +69,22 @@ def test_pool_exception_wrapping() -> None:
         multiprocessing.get_context("spawn").Pool(processes=1) as pool,
     ):
         _run_in_multiprocessing_pool(pool, raise_error, (None,))
+
+
+def test_cpu_limit() -> None:
+    """Test if cpu_limit caps the number of spawned workers."""
+    with tempfile.TemporaryDirectory(dir=Path(__file__).parent.resolve()) as tmp_dir_name:
+        dataset_path = Path(tmp_dir_name) / "dataset"
+        dataset_path.mkdir()
+        table = pa.table({"id": list(range(100))})
+        pq.write_table(table, dataset_path / "data.parquet", row_group_size=10)
+
+        with patch("quackosm._parquet_multiprocessing._run_processes") as run_processes_mock:
+            map_parquet_dataset(
+                dataset_path=dataset_path,
+                destination_path=Path(tmp_dir_name) / "result",
+                function=return_table,
+                cpu_limit=1,
+            )
+
+        assert len(run_processes_mock.call_args.kwargs["processes"]) == 1

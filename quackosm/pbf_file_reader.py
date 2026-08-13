@@ -1792,6 +1792,7 @@ class PbfFileReader:
                     result_path=tmp_intersected_nodes_ids_path,
                     geometry_filter=cast("BaseGeometry", self.geometry_filter),
                     progress_bar=bar,
+                    cpu_limit=self.cpu_limit,
                 )
 
                 is_empty = not any(tmp_intersected_nodes_ids_path.iterdir())

@@ -35,6 +35,7 @@ def intersect_nodes_with_geometry(
     result_path: Path,
     geometry_filter: BaseGeometry,
     progress_bar: Optional[TaskProgressBar] = None,
+    cpu_limit: Optional[int] = None,
 ) -> None:
     """
     Intersects nodes points with geometry filter using spatial index with multiprocessing.
@@ -45,6 +46,7 @@ def intersect_nodes_with_geometry(
         geometry_filter (BaseGeometry): Geometry used for filtering.
         progress_bar (Optional[TaskProgressBar]): Progress bar to show task status.
             Defaults to `None`
+        cpu_limit (Optional[int]): Max number of worker processes. Defaults to `None`.
     """
     map_parquet_dataset(
         dataset_path=nodes_path,
@@ -52,4 +54,5 @@ def intersect_nodes_with_geometry(
         progress_bar=progress_bar,
         function=partial(_intersect_nodes, geometry_filter=geometry_filter),
         columns=["id", "lat", "lon"],
+        cpu_limit=cpu_limit,
     )

@@ -100,6 +100,7 @@ def map_parquet_dataset(
     function: Callable[[pa.Table], pa.Table],
     columns: Optional[list[str]] = None,
     progress_bar: Optional[TaskProgressBar] = None,
+    cpu_limit: Optional[int] = None,
 ) -> None:
     """
     Apply a function over parquet dataset in a multiprocessing environment.
@@ -114,6 +115,8 @@ def map_parquet_dataset(
         columns (Optional[list[str]]): List of columns to read. Defaults to `None`.
         progress_bar (Optional[TaskProgressBar]): Progress bar to show task status.
             Defaults to `None`.
+        cpu_limit (Optional[int]): Max number of worker processes. Defaults to `None`,
+            which uses the number of CPUs available to this process.
     """
     dataset = pq.ParquetDataset(dataset_path)
 
@@ -138,7 +141,7 @@ def map_parquet_dataset(
                 target=_job,
                 args=(queue, destination_path, function, columns),
             )
-            for _ in range(min(_available_cpus(), total))
+            for _ in range(min(cpu_limit or _available_cpus(), total))
         ]
         _run_processes(processes=processes, queue=queue, total=total, progress_bar=progress_bar)
     finally:  # pragma: no cover
