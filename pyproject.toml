@@ -1,6 +1,6 @@
 [project]
 name = "QuackOSM"
-version = "0.17.1"
+version = "0.18.1"
 description = "An open-source tool for reading OpenStreetMap PBF files using DuckDB"
 authors = [{ name = "Kamil Raczycki", email = "kraczycki@kraina.ai" }]
 dependencies = [
@@ -18,7 +18,8 @@ dependencies = [
     "rich>=12.0.0",
     "geopy>=2.0.0",
     "numpy>=1.26.0",
-    "rq_geo_toolkit>=2026.2.1",
+    "rq_geo_toolkit>=2026.6.0",
+    "anyascii>=0.3.3",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -48,7 +49,8 @@ Changelog = "https://github.com/kraina-ai/quackosm/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 cli = [
-    "typer[all]>=0.9.0",
+    "typer>=0.9.0",
+    "click>=8.2.1",
     "s2sphere>=0.2.5",
 ]
 
@@ -173,7 +175,7 @@ close-quotes-on-newline = true
 wrap-one-line = true
 
 [tool.bumpver]
-current_version = "0.17.1"
+current_version = "0.18.1"
 version_pattern = "MAJOR.MINOR.PATCH[PYTAGNUM]"
 commit_message = "chore(CI/CD): bump version {old_version} -> {new_version}"
 commit = true
@@ -186,6 +188,7 @@ push = false
     '^version = "{version}"$',
 ]
 "quackosm/__init__.py" = ['^__version__ = "{version}"$']
+"CITATION.cff" = ['^version: {version}$']
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]

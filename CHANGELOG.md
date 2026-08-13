@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-07-23
+
+### Fixed
+
+- Added directories cleaning after every error in ways grouping operation
+
+## [0.18.0] - 2026-06-17
+
+### Added
+
+- `sort_algorithm` parameter (`"str"` by default, or `"hilbert"`) to all `convert_*` functions and `PbfFileReader` methods, plus a `--sort-algorithm` CLI flag, for choosing the geometry sorting algorithm
+- Internal testing of resources usage for filtered and intersected scenarios
+- Explicit `click` to the dependencies, since `typer` removed it from its own dependencies
+- CITATION.cff file with Zenodo DOI
+- New OpenStreetMap extract sources: [`GEO2Day`](https://geo2day.com/), [`Movisda-admin`](https://osm.download.movisda.io/select/admin/) and [`Movisda-grid`](https://osm.download.movisda.io/select/grid/)
+- `anyascii` to dependencies
+- BREAKING: Flag `select_first_match` parameter to `convert_osm_extract_to_*` functions and `--select-first-match/--no-select-first-match` CLI flag for querying OSM extracts by name with the default value being `True`
+
+### Changed
+
+- BREAKING: Default geometry sorting algorithm is now `"str"` (Sort-Tile-Recursive) instead of the Hilbert curve
+- Refactored whole PbfFileReader prefiltering implementation to reduce memory and disk usage
+  - Changed raw OSM tags manipulation query to reduce DuckDB operations
+  - Created dedicated paths for reading all features from the PBF file vs intersecting and/or filtering
+  - Renamed temporal directories names
+  - When filtering and/or intersecting added multiple steps operating on a much smaller dataset than previously
+  - Bundled all filtering steps into a single major step in progress reporting
+- Reduced number of major steps in the progress bar from 33 to 16
+- Automatic unavailable OSM extracts detection and retrying without available ones
+- Migrated OSM index file format from GeoJSON to Parquet to reduce disk size
+
 ## [0.17.1] - 2026-04-17
 
 ### Changed
@@ -587,7 +618,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created QuackOSM repository
 - Implemented PbfFileReader
 
-[Unreleased]: https://github.com/kraina-ai/quackosm/compare/0.17.1...HEAD
+[Unreleased]: https://github.com/kraina-ai/quackosm/compare/0.18.1...HEAD
+
+[0.18.1]: https://github.com/kraina-ai/quackosm/compare/0.18.0...0.18.1
+
+[0.18.0]: https://github.com/kraina-ai/quackosm/compare/0.17.1...0.18.0
 
 [0.17.1]: https://github.com/kraina-ai/quackosm/compare/0.17.0...0.17.1
 

@@ -41,8 +41,13 @@ def _display_osm_extracts_callback(ctx: typer.Context, value: bool) -> None:
 
         param_values = {p.name: p.default for p in ctx.command.params}
         param_values.update(ctx.params)
-        osm_source = cast("str", param_values.get("osm_extract_source"))
-        display_available_extracts(source=osm_source, use_full_names=True, use_pager=True)
+        selected_sources = param_values.get("osm_extract_source") or [OsmExtractSource.any]
+        # `--show-extracts` displays a single source tree; with multiple sources selected
+        # fall back to `any`. Displaying a subset of sources is out of scope for the tree.
+        display_source: Union[OsmExtractSource, str] = (
+            selected_sources[0] if len(selected_sources) == 1 else OsmExtractSource.any
+        )
+        display_available_extracts(source=display_source, use_full_names=True, use_pager=True)
         raise typer.Exit()
 
 
@@ -508,19 +513,33 @@ def main(
         ),
     ] = None,
     osm_extract_source: Annotated[
-        OsmExtractSource,
+        Optional[list[OsmExtractSource]],
         typer.Option(
             "--osm-extract-source",
             "--pbf-download-source",
             help=(
                 "Source where to download the PBF file from."
-                " Can be Geofabrik, BBBike, OSMfr (OpenStreetMap.fr) or any."
+                " Can be Geofabrik, BBBike, OSMfr (OpenStreetMap.fr), GEO2Day,"
+                " Movisda-admin, Movisda-grid or any."
+                " Can be passed multiple times to combine sources"
+                " (e.g. --osm-extract-source BBBike --osm-extract-source OSMfr)."
             ),
             case_sensitive=False,
             show_default="any",
             is_eager=True,
         ),
-    ] = OsmExtractSource.any,
+    ] = None,
+    select_first_match: Annotated[
+        bool,
+        typer.Option(
+            "--select-first-match/--no-select-first-match",
+            help=(
+                "When the OSM extract query matches multiple extracts by name, select the first"
+                " one (sorted by area ascending, then id) with a warning instead of raising an"
+                " error."
+            ),
+        ),
+    ] = True,
     explode_tags: Annotated[
         Optional[bool],
         typer.Option(
@@ -665,6 +684,17 @@ def main(
             show_default=True,
         ),
     ] = True,
+    sort_algorithm: Annotated[
+        str,
+        typer.Option(
+            "--sort-algorithm",
+            help=(
+                "Algorithm used to sort the final geoparquet file by geometry."
+                " Supported options: str (Sort-Tile-Recursive) and hilbert (Hilbert curve)."
+            ),
+            show_default=True,
+        ),
+    ] = "str",
     ignore_metadata_tags: Annotated[
         bool,
         typer.Option(
@@ -770,6 +800,15 @@ def main(
         )
     parquet_version = cast('Literal["v1", "v2"]', parquet_version)
 
+    if sort_algorithm not in ("str", "hilbert"):
+        raise typer.BadParameter(
+            f"Provided incompatible sort_algorithm ({sort_algorithm})."
+            " Valid options: str and hilbert."
+        )
+    sort_algorithm = cast('Literal["str", "hilbert"]', sort_algorithm)
+
+    osm_extract_source = osm_extract_source or [OsmExtractSource.any]
+
     number_of_geometries_provided = sum(
         geom is not None
         for geom in (
@@ -865,6 +904,7 @@ def main(
             filter_osm_ids=filter_osm_ids,  # type: ignore
             custom_sql_filter=custom_sql_filter,
             sort_result=sort_result,
+            sort_algorithm=sort_algorithm,
             save_as_wkt=wkt_result,
             verbosity_mode=verbosity_mode,
             cpu_limit=cpu_limit,
@@ -894,6 +934,7 @@ def main(
             filter_osm_ids=filter_osm_ids,  # type: ignore
             custom_sql_filter=custom_sql_filter,
             sort_result=sort_result,
+            sort_algorithm=sort_algorithm,
             duckdb_table_name=duckdb_table_name or "quackosm",
             verbosity_mode=verbosity_mode,
             cpu_limit=cpu_limit,
@@ -906,6 +947,7 @@ def main(
             result_path = convert_osm_extract_to_parquet(
                 osm_extract_query=cast("str", osm_extract_query),
                 osm_extract_source=osm_extract_source,
+                select_first_match=select_first_match,
                 tags_filter=osm_tags_filter or osm_tags_filter_file,  # type: ignore
                 keep_all_tags=keep_all_tags,
                 geometry_filter=geometry_filter_value,
@@ -926,6 +968,7 @@ def main(
                 filter_osm_ids=filter_osm_ids,  # type: ignore
                 custom_sql_filter=custom_sql_filter,
                 sort_result=sort_result,
+                sort_algorithm=sort_algorithm,
                 save_as_wkt=wkt_result,
                 verbosity_mode=verbosity_mode,
                 cpu_limit=cpu_limit,
@@ -944,6 +987,7 @@ def main(
             result_path = convert_osm_extract_to_duckdb(
                 osm_extract_query=cast("str", osm_extract_query),
                 osm_extract_source=osm_extract_source,
+                select_first_match=select_first_match,
                 tags_filter=osm_tags_filter or osm_tags_filter_file,  # type: ignore
                 keep_all_tags=keep_all_tags,
                 geometry_filter=geometry_filter_value,
@@ -964,6 +1008,7 @@ def main(
                 filter_osm_ids=filter_osm_ids,  # type: ignore
                 custom_sql_filter=custom_sql_filter,
                 sort_result=sort_result,
+                sort_algorithm=sort_algorithm,
                 duckdb_table_name=duckdb_table_name or "quackosm",
                 verbosity_mode=verbosity_mode,
                 cpu_limit=cpu_limit,
@@ -999,6 +1044,7 @@ def main(
             filter_osm_ids=filter_osm_ids,  # type: ignore
             custom_sql_filter=custom_sql_filter,
             sort_result=sort_result,
+            sort_algorithm=sort_algorithm,
             save_as_wkt=wkt_result,
             verbosity_mode=verbosity_mode,
             geometry_coverage_iou_threshold=geometry_coverage_iou_threshold,
@@ -1031,6 +1077,7 @@ def main(
             custom_sql_filter=custom_sql_filter,
             duckdb_table_name=duckdb_table_name or "quackosm",
             sort_result=sort_result,
+            sort_algorithm=sort_algorithm,
             save_as_wkt=wkt_result,
             verbosity_mode=verbosity_mode,
             geometry_coverage_iou_threshold=geometry_coverage_iou_threshold,
