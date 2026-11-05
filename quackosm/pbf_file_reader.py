@@ -2549,8 +2549,10 @@ class PbfFileReader:
                     SELECT
                         ob.id,
                         ob.geometry_id,
-                        ST_Union_Agg(ig.geometry) holes,
-                        bool_and(ST_Area(ig.geometry) > 0) all_areal
+                        ST_Union_Agg(ig.geometry) FILTER (WHERE ST_IsValid(ig.geometry)) holes,
+                        bool_and(
+                            ST_IsValid(ig.geometry) AND ST_Area(ig.geometry) > 0
+                        ) all_valid_areal
                     FROM outer_boxes ob
                     JOIN inner_parts ig
                     ON ob.id = ig.id
@@ -2564,7 +2566,7 @@ class PbfFileReader:
                         og.geometry_id,
                         og.geometry,
                         ch.holes,
-                        ch.all_areal AND ST_WITHIN(ch.holes, og.geometry) all_holes_within
+                        ch.all_valid_areal AND ST_WITHIN(ch.holes, og.geometry) all_holes_within
                     FROM outer_parts og
                     JOIN candidate_holes ch
                     ON og.id = ch.id AND og.geometry_id = ch.geometry_id
