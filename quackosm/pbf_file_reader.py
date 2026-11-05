@@ -2529,15 +2529,58 @@ class PbfFileReader:
             step_name="Saving relations outer parts",
         )
         if any_relation_inner_parts:
+            # A predicate keeps each row's geometries until its vector ends, so huge outer parts are
+            # tested once against the union of their holes and only failures take the per-hole path.
             relation_outer_parts_with_holes = self.connection.sql(
                 f"""
+                WITH outer_parts AS (
+                    SELECT * FROM ({relation_outer_parts_parquet.sql_query()})
+                ),
+                inner_parts AS (
+                    SELECT * FROM ({relation_inner_parts_parquet.sql_query()})
+                ),
+                outer_boxes AS (
+                    SELECT
+                        id, geometry_id, ST_XMin(geometry) xmin, ST_YMin(geometry) ymin,
+                        ST_XMax(geometry) xmax, ST_YMax(geometry) ymax
+                    FROM outer_parts
+                ),
+                candidate_holes AS (
+                    SELECT
+                        ob.id,
+                        ob.geometry_id,
+                        ST_Union_Agg(ig.geometry) holes,
+                        bool_and(ST_Area(ig.geometry) > 0) all_areal
+                    FROM outer_boxes ob
+                    JOIN inner_parts ig
+                    ON ob.id = ig.id
+                    AND ST_XMin(ig.geometry) >= ob.xmin AND ST_YMin(ig.geometry) >= ob.ymin
+                    AND ST_XMax(ig.geometry) <= ob.xmax AND ST_YMax(ig.geometry) <= ob.ymax
+                    GROUP BY ob.id, ob.geometry_id
+                ),
+                checked_outer_parts AS (
+                    SELECT
+                        og.id,
+                        og.geometry_id,
+                        og.geometry,
+                        ch.holes,
+                        ch.all_areal AND ST_WITHIN(ch.holes, og.geometry) all_holes_within
+                    FROM outer_parts og
+                    JOIN candidate_holes ch
+                    ON og.id = ch.id AND og.geometry_id = ch.geometry_id
+                )
+                SELECT id, geometry_id, ST_Difference(geometry, holes) geometry
+                FROM checked_outer_parts
+                WHERE all_holes_within IS TRUE
+                UNION ALL
                 SELECT
                     og.id,
                     og.geometry_id,
                     ST_Difference(any_value(og.geometry), ST_Union_Agg(ig.geometry)) geometry
-                FROM ({relation_outer_parts_parquet.sql_query()}) og
-                JOIN ({relation_inner_parts_parquet.sql_query()}) ig
+                FROM checked_outer_parts og
+                JOIN inner_parts ig
                 ON og.id = ig.id AND ST_WITHIN(ig.geometry, og.geometry)
+                WHERE og.all_holes_within IS NOT TRUE
                 GROUP BY og.id, og.geometry_id
                 """
             )
